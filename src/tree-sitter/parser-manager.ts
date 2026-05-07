@@ -5,9 +5,11 @@
  * Grammar .wasm files come from the tree-sitter-wasms npm package.
  */
 
-import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
+import { dirname, resolve } from "node:path";
 import Parser from "web-tree-sitter";
+
+const require = createRequire(import.meta.url);
 import { getLanguageIdFromPath } from "../shared/language-map.js";
 
 type Language = Parser.Language;
@@ -55,11 +57,9 @@ export class TreeSitterManager {
   private grammarsDir: string;
 
   constructor() {
-    // Resolve the grammars directory from tree-sitter-wasms package
-    this.grammarsDir = resolve(
-      fileURLToPath(new URL(".", import.meta.url)),
-      "../../node_modules/tree-sitter-wasms/out"
-    );
+    // Use Node's module resolution so this works for local, global, and hoisted installs
+    const wasmsPkgJson = require.resolve("tree-sitter-wasms/package.json");
+    this.grammarsDir = resolve(dirname(wasmsPkgJson), "out");
   }
 
   /** Initialize web-tree-sitter WASM runtime. Must be called before any parsing. */
@@ -71,12 +71,9 @@ export class TreeSitterManager {
     }
     this.initializing = Parser.init({
       locateFile: (scriptName: string) => {
-        // web-tree-sitter needs its own .wasm file
-        return resolve(
-          fileURLToPath(new URL(".", import.meta.url)),
-          "../../node_modules/web-tree-sitter",
-          scriptName
-        );
+        // Use module resolution to find web-tree-sitter regardless of install layout
+        const webTsPkgJson = require.resolve("web-tree-sitter/package.json");
+        return resolve(dirname(webTsPkgJson), scriptName);
       },
     });
     await this.initializing;
