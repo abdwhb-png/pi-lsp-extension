@@ -229,14 +229,36 @@ export class LspManager {
   getUnavailableReason(filePath: string): string {
     const languageId = this.getLanguageId(filePath);
     if (!languageId) return `No LSP server configured for file type: ${filePath}`;
+    const waitHint = this.getExpectedStartTime(languageId);
     if (this.startingServers.has(languageId)) {
-      return `LSP server for ${languageId} is still starting up. Try again in a moment.`;
+      return `LSP server for ${languageId} is starting. ${waitHint} Retry shortly.`;
     }
     const existing = this.clients.get(languageId);
     if (existing && !existing.initialized && !existing.disposed) {
-      return `LSP server for ${languageId} is initializing. Try again in a moment.`;
+      return `LSP server for ${languageId} is initializing. ${waitHint} Retry shortly.`;
     }
-    return `No LSP server available for: ${filePath}`;
+    return `No LSP server available for: ${filePath}. If you just opened this project, call any LSP tool on a file to trigger server startup.`;
+  }
+
+  /** Estimated startup time hint for a language server */
+  private getExpectedStartTime(languageId: string): string {
+    switch (languageId) {
+      case "java":
+        return "This typically takes 1-5 minutes for Java (project indexing).";
+      case "rust":
+        return "This typically takes 30s-2min for Rust (cargo metadata + indexing).";
+      case "typescript":
+      case "javascript":
+      case "typescriptreact":
+      case "javascriptreact":
+        return "This typically takes 10-30s for TypeScript/JavaScript.";
+      case "python":
+        return "This typically takes 10-30s for Python.";
+      case "go":
+        return "This typically takes 10-30s for Go.";
+      default:
+        return "This may take a few seconds to a minute.";
+    }
   }
 
   /**
