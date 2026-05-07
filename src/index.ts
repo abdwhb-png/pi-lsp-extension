@@ -9,6 +9,11 @@
  * - lsp_symbols: file/workspace symbol search
  * - lsp_rename: preview rename refactoring
  * - lsp_completions: code completion suggestions at a position
+ * - lsp_code_actions: quick fixes, refactorings, and source actions
+ *
+ * Position-based tools (hover, definition, references, rename, code_actions)
+ * accept an optional `query` parameter as an alternative to line/character,
+ * resolving a symbol name to its position automatically.
  *
  * Usage:
  *   1. npm install in this directory
