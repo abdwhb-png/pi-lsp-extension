@@ -167,6 +167,13 @@ export default function lspExtension(pi: ExtensionAPI) {
     onServerError: (languageId: string, _error: string) => {
       setLspStatus("error", `LSP: ${languageId} failed`);
     },
+    onServerCrash: (languageId: string, restarting: boolean, attempt: number) => {
+      if (restarting) {
+        setLspStatus("warning", `LSP: restarting ${languageId}... (attempt ${attempt}/3)`);
+      } else {
+        setLspStatus("error", `LSP: ${languageId} crashed — auto-restart exhausted`);
+      }
+    },
   });
 
   // Create manager eagerly so tools can reference it, but servers start lazily

@@ -27,6 +27,7 @@ export interface LspManagerCallbacks {
   onServerStart?: (languageId: string, command: string) => void;
   onServerReady?: (languageId: string) => void;
   onServerError?: (languageId: string, error: string) => void;
+  onServerCrash?: (languageId: string, restarting: boolean, attempt: number) => void;
 }
 
 /** Default server configurations for common languages */
@@ -63,6 +64,13 @@ export class LspManager {
   private _callbacks: LspManagerCallbacks;
   private _sessionId: string;
   private _lombokJarPath: string | null = null;
+  private _shuttingDown = false;
+  private _restartAttempts: Map<string, number> = new Map();
+  private _restartBackoff: Map<string, number> = new Map();
+
+  private static readonly MAX_RESTART_ATTEMPTS = 3;
+  private static readonly INITIAL_BACKOFF_MS = 1000;
+  private static readonly MAX_BACKOFF_MS = 30000;
 
   constructor(rootDir: string, customConfigs?: Record<string, ServerConfig>, callbacks?: LspManagerCallbacks, sessionId?: string, workspace?: WorkspaceProvider) {
     this.rootDir = resolve(rootDir);
@@ -340,6 +348,8 @@ export class LspManager {
       }
     }
 
+    // Callback for auto-restart on unexpected exit
+    const onUnexpectedExit = (code: number | null) => this.handleUnexpectedExit(languageId, code);
     // Try connecting to an existing daemon socket first
     const socketPath = this.getSocketPath(languageId);
     if (socketPath && this.isDaemonAlive(languageId)) {
@@ -352,11 +362,14 @@ export class LspManager {
           languageId,
           socketPath,
           initializationOptions,
+          onUnexpectedExit,
         });
         await client.start();
         this.clients.set(languageId, client);
         this.startingServers.delete(languageId);
         this._callbacks.onServerReady?.(languageId);
+        this._restartAttempts.delete(languageId);
+        this._restartBackoff.delete(languageId);
         this.triggerPostInit(languageId, client);
         return client;
       } catch {
@@ -387,11 +400,14 @@ export class LspManager {
               languageId,
               socketPath: daemonSocket,
               initializationOptions,
+              onUnexpectedExit,
             });
             await client.start();
             this.clients.set(languageId, client);
             this.startingServers.delete(languageId);
             this._callbacks.onServerReady?.(languageId);
+            this._restartAttempts.delete(languageId);
+            this._restartBackoff.delete(languageId);
             this.triggerPostInit(languageId, client);
             return client;
           } catch (err: any) {
@@ -421,6 +437,7 @@ export class LspManager {
       env: config.env,
       workspaceFolders,
       initializationOptions,
+      onUnexpectedExit,
     });
 
     try {
@@ -428,6 +445,8 @@ export class LspManager {
       this.clients.set(languageId, client);
       this.startingServers.delete(languageId);
       this._callbacks.onServerReady?.(languageId);
+      this._restartAttempts.delete(languageId);
+      this._restartBackoff.delete(languageId);
       this.triggerPostInit(languageId, client);
       return client;
     } catch (err: any) {
@@ -552,9 +571,50 @@ export class LspManager {
     return statuses;
   }
 
+  /**
+   * Handle an unexpected server exit. Attempts auto-restart with exponential backoff.
+   * Gives up after MAX_RESTART_ATTEMPTS failures per language per session.
+   */
+  private handleUnexpectedExit(languageId: string, code: number | null): void {
+    if (this._shuttingDown) return;
+
+    // Clean up the dead client
+    this.clients.delete(languageId);
+    this.startingServers.delete(languageId);
+
+    const attempts = this._restartAttempts.get(languageId) ?? 0;
+    if (attempts >= LspManager.MAX_RESTART_ATTEMPTS) {
+      this._callbacks.onServerError?.(languageId, `LSP server for ${languageId} crashed ${attempts} times — giving up auto-restart`);
+      this._callbacks.onServerCrash?.(languageId, false, attempts);
+      return;
+    }
+
+    const backoff = this._restartBackoff.get(languageId) ?? LspManager.INITIAL_BACKOFF_MS;
+    this._restartAttempts.set(languageId, attempts + 1);
+    this._restartBackoff.set(languageId, Math.min(backoff * 2, LspManager.MAX_BACKOFF_MS));
+
+    this._callbacks.onServerCrash?.(languageId, true, attempts + 1);
+
+    setTimeout(() => {
+      if (this._shuttingDown) return;
+      const config = this.serverConfigs.get(languageId);
+      if (!config) return;
+
+      const startPromise = this.startServer(languageId, config);
+      this.startingServers.set(languageId, startPromise);
+      startPromise.catch((err) => {
+        this.startingServers.delete(languageId);
+        this._callbacks.onServerError?.(languageId, `Auto-restart failed for ${languageId}: ${err.message}`);
+        // Trigger another restart attempt (recursive backoff)
+        this.handleUnexpectedExit(languageId, null);
+      });
+    }, backoff);
+  }
+
   /** Shut down all clients (disconnect from daemons, kill direct servers) */
   async shutdownAll(): Promise<void> {
     this._workspace.shutdown();
+    this._shuttingDown = true;
     const shutdowns = [...this.clients.values()].map((client) =>
       client.shutdown().catch(() => {})
     );

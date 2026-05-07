@@ -45,6 +45,8 @@ export interface LspClientOptions {
   socketPath?: string;
   /** LSP initializationOptions (e.g. jdtls settings for Lombok) */
   initializationOptions?: Record<string, unknown>;
+  /** Called when the server exits unexpectedly (not from user-initiated shutdown) */
+  onUnexpectedExit?: (code: number | null) => void;
 }
 
 export class LspClient {
@@ -153,6 +155,7 @@ export class LspClient {
       socket.on("close", () => {
         if (!this._disposed) {
           this._initialized = false;
+          this.options.onUnexpectedExit?.(null);
         }
       });
 
@@ -245,6 +248,7 @@ export class LspClient {
         console.error(`[LSP ${this.languageId}] Server exited with code ${code}`);
         this._initialized = false;
         this.disposeConnection();
+        this.options.onUnexpectedExit?.(code);
       }
     });
 
