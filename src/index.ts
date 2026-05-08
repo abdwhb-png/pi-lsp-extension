@@ -123,6 +123,30 @@ export default function lspExtension(pi: ExtensionAPI) {
   // Project config — loaded on session_start, used by auto-injection guard
   let projectConfig: ProjectLspConfig | null = null;
 
+  /**
+   * Run `fn` with the currently captured ctx, swallowing stale-ctx errors.
+   *
+   * Lifecycle callbacks from LspManager (server ready, workspace setup, etc.)
+   * and `pi.events` listeners can fire AFTER the session is replaced or reloaded,
+   * at which point the captured ctx has been invalidated and any property access
+   * throws via ExtensionRunner.assertActive(). We can't use optional chaining to
+   * dodge it because the `ui` / `theme` getters themselves run assertActive().
+   */
+  const withLatestCtx = (fn: (ctx: any) => void) => {
+    const ctx = latestCtx;
+    if (!ctx) return;
+    try {
+      fn(ctx);
+    } catch (err: any) {
+      if (typeof err?.message === "string" && err.message.includes("stale after session")) {
+        // Session was replaced/reloaded — drop the stale ctx and move on.
+        latestCtx = null;
+        return;
+      }
+      throw err;
+    }
+  };
+
   // Listen for external workspace providers (e.g. bemol extension).
   // Also check if one was already registered before we loaded (load order varies).
   // Store as pendingProvider so it's available when the manager is created later.
@@ -134,9 +158,11 @@ export default function lspExtension(pi: ExtensionAPI) {
     }
     // Update status if we have a UI context
     const statusText = provider.getStatusText();
-    if (statusText && latestCtx?.ui?.theme) {
-      latestCtx.ui.setStatus("lsp", latestCtx.ui.theme.fg("accent", `LSP: ${statusText}`));
-    }
+    if (!statusText) return;
+    withLatestCtx((ctx) => {
+      if (!ctx.ui?.theme) return;
+      ctx.ui.setStatus("lsp", ctx.ui.theme.fg("accent", `LSP: ${statusText}`));
+    });
   };
 
   pi.events.on("lsp:register-workspace-provider", applyProvider);
@@ -147,9 +173,10 @@ export default function lspExtension(pi: ExtensionAPI) {
 
   /** Build lifecycle callbacks that update UI status */
   const setLspStatus = (color: string, text: string) => {
-    const ctx = latestCtx;
-    if (!ctx?.ui?.theme) return;
-    ctx.ui.setStatus("lsp", ctx.ui.theme.fg(color, text));
+    withLatestCtx((ctx) => {
+      if (!ctx.ui?.theme) return;
+      ctx.ui.setStatus("lsp", ctx.ui.theme.fg(color, text));
+    });
   };
 
   const makeCallbacks = (): LspManagerCallbacks => ({
@@ -560,6 +587,10 @@ export default function lspExtension(pi: ExtensionAPI) {
 
   // Clean shutdown (includes workspace provider, all LSP servers, and tree-sitter)
   pi.on("session_shutdown", async () => {
+    // Drop the captured ctx immediately — once shutdown fires, any late
+    // LSP manager callback that reaches setLspStatus/applyProvider would
+    // otherwise hit an invalidated ctx and throw an uncaught exception.
+    latestCtx = null;
     if (manager) {
       await manager.shutdownAll();
       manager = null;
