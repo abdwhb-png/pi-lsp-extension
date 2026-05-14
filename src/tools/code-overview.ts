@@ -8,9 +8,9 @@
  */
 
 import { Type } from "@sinclair/typebox";
-import type { ToolDefinition } from "@mariozechner/pi-coding-agent";
-import { truncateHead, DEFAULT_MAX_LINES, DEFAULT_MAX_BYTES } from "@mariozechner/pi-coding-agent";
-import { Text } from "@mariozechner/pi-tui";
+import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
+import { truncateHead, DEFAULT_MAX_LINES, DEFAULT_MAX_BYTES } from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
 import { resolve, relative } from "node:path";
 import { readdir, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";

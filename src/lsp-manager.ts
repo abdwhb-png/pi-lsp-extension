@@ -532,10 +532,10 @@ export class LspManager {
     // Resolve jiti from the running process's module context
     let jitiPath: string;
     try {
-      jitiPath = require.resolve("@mariozechner/jiti");
+      jitiPath = require.resolve("jiti");
     } catch {
       try {
-        jitiPath = require.resolve("jiti");
+        jitiPath = require.resolve("@mariozechner/jiti");
       } catch {
         throw new Error("Cannot resolve jiti for daemon spawn — jiti not found in module path");
       }

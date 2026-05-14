@@ -9,7 +9,7 @@
  * Requires: bemol on PATH (toolbox install bemol)
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { join } from "node:path";
 import { BemolManager } from "./bemol.js";
 

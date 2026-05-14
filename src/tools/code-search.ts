@@ -6,8 +6,8 @@
  */
 
 import { Type } from "@sinclair/typebox";
-import type { ToolDefinition } from "@mariozechner/pi-coding-agent";
-import { truncateHead, DEFAULT_MAX_LINES, DEFAULT_MAX_BYTES } from "@mariozechner/pi-coding-agent";
+import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
+import { truncateHead, DEFAULT_MAX_LINES, DEFAULT_MAX_BYTES } from "@earendil-works/pi-coding-agent";
 import { relative } from "node:path";
 import type { TreeSitterManager } from "../tree-sitter/parser-manager.js";
 import { compilePattern } from "../tree-sitter/pattern-compiler.js";

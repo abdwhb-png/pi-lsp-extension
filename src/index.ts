@@ -21,12 +21,12 @@
  *   3. LSP servers start lazily when you first use a tool on a file
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
   isReadToolResult,
   isWriteToolResult,
   isEditToolResult,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 import { DiagnosticSeverity, type Diagnostic } from "vscode-languageserver-protocol";
 
 import { LspManager, type ServerConfig, type LspManagerCallbacks } from "./lsp-manager.js";

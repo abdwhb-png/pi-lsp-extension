@@ -4,8 +4,8 @@
 
 import { Type } from "@sinclair/typebox";
 import type { Hover, MarkupContent } from "vscode-languageserver-protocol";
-import type { ToolDefinition } from "@mariozechner/pi-coding-agent";
-import { Text } from "@mariozechner/pi-tui";
+import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
 import type { LspManager } from "../lsp-manager.js";
 import type { TreeSitterManager } from "../tree-sitter/parser-manager.js";
 import { resolveProvider } from "../resolve-provider.js";
