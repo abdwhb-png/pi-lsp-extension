@@ -45,6 +45,8 @@ export interface LspClientOptions {
   socketPath?: string;
   /** LSP initializationOptions (e.g. jdtls settings for Lombok) */
   initializationOptions?: Record<string, unknown>;
+  /** Settings returned by workspace/configuration handler (keyed by section, e.g. { intelephense: {...} }) */
+  settings?: Record<string, unknown>;
   /** Called when the server exits unexpectedly (not from user-initiated shutdown) */
   onUnexpectedExit?: (code: number | null) => void;
 }
@@ -125,6 +127,20 @@ export class LspClient {
           "textDocument/publishDiagnostics",
           (params: PublishDiagnosticsParams) => {
             this._diagnostics.set(params.uri, params.diagnostics);
+          }
+        );
+
+        // Handle workspace/configuration requests from the server
+        this.connection.onRequest(
+          "workspace/configuration",
+          (params: { items: { section?: string }[] }) => {
+            const settings = this.options.settings;
+            return params.items.map((item) => {
+              if (item.section && settings && item.section in settings) {
+                return settings[item.section];
+              }
+              return {};
+            });
           }
         );
 
@@ -264,6 +280,22 @@ export class LspClient {
       }
     );
 
+    // Handle workspace/configuration requests from the server.
+    // Servers like Intelephense request their settings via this method.
+    // Return settings from options if configured, otherwise empty defaults.
+    this.connection.onRequest(
+      "workspace/configuration",
+      (params: { items: { section?: string }[] }) => {
+        const settings = this.options.settings;
+        return params.items.map((item) => {
+          if (item.section && settings && item.section in settings) {
+            return settings[item.section];
+          }
+          return {};
+        });
+      }
+    );
+
     // Handle connection-level errors to prevent unhandled exceptions
     this.connection.onError(([err]) => {
       console.error(`[LSP ${this.languageId}] Connection error: ${err.message}`);
@@ -317,6 +349,7 @@ export class LspClient {
         workspace: {
           workspaceFolders: true,
           symbol: {},
+          configuration: true,
         },
       },
       rootUri,

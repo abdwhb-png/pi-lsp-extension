@@ -18,6 +18,10 @@ export interface ServerConfig {
   command: string;
   args: string[];
   env?: Record<string, string>;
+  /** LSP initializationOptions passed during the initialize handshake */
+  initializationOptions?: Record<string, unknown>;
+  /** Settings returned by workspace/configuration handler (keyed by section) */
+  settings?: Record<string, unknown>;
 }
 
 /** Lifecycle callbacks for UI notifications */
@@ -357,9 +361,9 @@ export class LspManager {
     const workspaceFolders = folders.length > 0 ? folders : undefined;
 
     // Build language-specific initializationOptions (e.g. Lombok for Java)
-    const initializationOptions = languageId === "java"
-      ? this.getJavaInitializationOptions()
-      : undefined;
+    // Use config-level initializationOptions if provided, otherwise fall back to language-specific defaults
+    const initializationOptions = config.initializationOptions
+      ?? (languageId === "java" ? this.getJavaInitializationOptions() : undefined);
 
     // For Java with Lombok, inject --jvm-arg so jdtls launches with -javaagent
     let effectiveArgs = config.args;
@@ -384,6 +388,7 @@ export class LspManager {
           languageId,
           socketPath,
           initializationOptions,
+          settings: config.settings,
           onUnexpectedExit,
         });
         await client.start();
@@ -422,6 +427,7 @@ export class LspManager {
               languageId,
               socketPath: daemonSocket,
               initializationOptions,
+              settings: config.settings,
               onUnexpectedExit,
             });
             await client.start();
@@ -459,6 +465,7 @@ export class LspManager {
       env: config.env,
       workspaceFolders,
       initializationOptions,
+      settings: config.settings,
       onUnexpectedExit,
     });
 
