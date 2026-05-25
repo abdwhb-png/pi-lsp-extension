@@ -117,6 +117,7 @@ const rootDir = process.env.LSP_ROOT_DIR || process.cwd();
 const languageId = process.env.LSP_LANGUAGE_ID || "unknown";
 const workspaceFoldersJson = process.env.LSP_WORKSPACE_FOLDERS;
 const initializationOptionsJson = process.env.LSP_INITIALIZATION_OPTIONS;
+const settingsJson = process.env.LSP_SETTINGS;
 
 if (!socketPath || !lspCommand) {
   console.error("Usage: lsp-daemon.js <socketPath> <command> [args...]");
@@ -126,8 +127,12 @@ if (!socketPath || !lspCommand) {
 let nextClientId = 1;
 let nextDaemonRequestId = 1;
 const clients = new Map<number, ClientConnection>();
-/** Map daemon request ID → { clientId, originalId } */
+/** Map daemon request ID → { clientId, originalId } for client-initiated requests */
 const pendingRequests = new Map<number | string, { clientId: number; originalId: number | string }>();
+/** Map server request ID → clientId for server-initiated requests forwarded to a client */
+const pendingServerRequests = new Map<number | string, number>();
+/** Parsed settings for workspace/configuration responses */
+let settings: Record<string, unknown> | undefined;
 let shutdownTimer: ReturnType<typeof setTimeout> | null = null;
 let server: Server;
 let lspProcess: ChildProcess;
@@ -175,6 +180,12 @@ function clientToServer(clientId: number, msg: JsonRpcMessage): void {
     pendingRequests.set(daemonId, { clientId, originalId: msg.id });
     const rewritten = { ...msg, id: daemonId };
     lspProcess.stdin.write(encodeMessage(rewritten));
+  } else if (msg.id !== undefined && !msg.method) {
+    // Response from client to a server-initiated request — relay back to LSP server
+    if (pendingServerRequests.has(msg.id)) {
+      pendingServerRequests.delete(msg.id);
+      lspProcess.stdin.write(encodeMessage(msg));
+    }
   } else {
     // Notification from client — forward as-is
     lspProcess.stdin.write(encodeMessage(msg));
@@ -227,6 +238,9 @@ function serverToClients(msg: JsonRpcMessage): void {
         client.socket.write(encodeMessage(rewritten));
       }
     }
+  } else if (msg.id !== undefined && msg.method) {
+    // Server-initiated request (e.g. workspace/configuration) — handle locally or forward to a client
+    handleServerRequest(msg);
   } else if (msg.method && msg.id === undefined) {
     // Notification from server — broadcast to ALL clients
     const encoded = encodeMessage(msg);
@@ -236,6 +250,52 @@ function serverToClients(msg: JsonRpcMessage): void {
       }
     }
   }
+}
+
+/**
+ * Handle a server-initiated request.
+ * Some requests (workspace/configuration) can be answered locally by the daemon.
+ * Others are forwarded to the first connected client and the response is relayed back.
+ */
+function handleServerRequest(msg: JsonRpcMessage): void {
+  if (msg.method === "workspace/configuration") {
+    // Answer locally — daemon has the settings from LSP_SETTINGS env
+    const params = msg.params as { items: { section?: string }[] } | undefined;
+    const items = params?.items ?? [];
+    const result = items.map((item) => {
+      if (item.section && settings && item.section in settings) {
+        return settings[item.section];
+      }
+      return {};
+    });
+    const response: JsonRpcMessage = { jsonrpc: "2.0", id: msg.id!, result };
+    lspProcess.stdin!.write(encodeMessage(response));
+    return;
+  }
+
+  // For other server-initiated requests, forward to first connected client
+  // and relay the response back to the server
+  const firstClient = getFirstConnectedClient();
+  if (firstClient) {
+    pendingServerRequests.set(msg.id!, firstClient.id);
+    firstClient.socket.write(encodeMessage(msg));
+  } else {
+    // No clients connected — respond with error
+    const errorResponse: JsonRpcMessage = {
+      jsonrpc: "2.0",
+      id: msg.id!,
+      error: { code: -32001, message: "No clients connected to handle request" },
+    };
+    lspProcess.stdin!.write(encodeMessage(errorResponse));
+  }
+}
+
+/** Get first non-destroyed connected client */
+function getFirstConnectedClient(): ClientConnection | undefined {
+  for (const client of clients.values()) {
+    if (!client.socket.destroyed) return client;
+  }
+  return undefined;
 }
 
 // ── Initialize LSP Server ──────────────────────────────────────────────────
@@ -274,7 +334,7 @@ async function initializeLsp(): Promise<void> {
           publishDiagnostics: { relatedInformation: true },
           completion: { completionItem: { snippetSupport: false } },
         },
-        workspace: { workspaceFolders: true, symbol: {} },
+        workspace: { workspaceFolders: true, symbol: {}, configuration: true },
       },
       rootUri,
       workspaceFolders,
@@ -445,6 +505,13 @@ process.on("unhandledRejection", (reason) => {
 
 async function main() {
   log(`Starting daemon: ${lspCommand} ${lspArgs.join(" ")} (${languageId})`);
+
+  // Parse settings for workspace/configuration responses
+  if (settingsJson) {
+    try {
+      settings = JSON.parse(settingsJson);
+    } catch { /* ignore malformed settings */ }
+  }
 
   lspProcess = spawnLspServer();
 

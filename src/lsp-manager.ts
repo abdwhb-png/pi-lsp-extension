@@ -563,6 +563,10 @@ export class LspManager {
       env.LSP_INITIALIZATION_OPTIONS = JSON.stringify(initializationOptions);
     }
 
+    if (config.settings) {
+      env.LSP_SETTINGS = JSON.stringify(config.settings);
+    }
+
     const child = spawnChild(
       process.execPath, // node
       [launcherScript, jitiPath, daemonScript, socketPath, config.command, ...effectiveArgs],
