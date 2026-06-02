@@ -510,7 +510,7 @@ async function main() {
   if (settingsJson) {
     try {
       settings = JSON.parse(settingsJson);
-    } catch { /* ignore malformed settings */ }
+    } catch (e) { log(`Warning: failed to parse LSP_SETTINGS: ${e}`); }
   }
 
   lspProcess = spawnLspServer();
