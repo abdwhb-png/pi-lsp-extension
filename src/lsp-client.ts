@@ -45,6 +45,8 @@ export interface LspClientOptions {
   socketPath?: string;
   /** LSP initializationOptions (e.g. jdtls settings for Lombok) */
   initializationOptions?: Record<string, unknown>;
+  /** Settings returned by workspace/configuration handler (keyed by section, e.g. { intelephense: {...} }) */
+  settings?: Record<string, unknown>;
   /** Called when the server exits unexpectedly (not from user-initiated shutdown) */
   onUnexpectedExit?: (code: number | null) => void;
 }
@@ -103,6 +105,46 @@ export class LspClient {
     }
   }
 
+  /** Register shared connection handlers (diagnostics, workspace/configuration, errors) */
+  private registerConnectionHandlers(): void {
+    if (!this.connection) return;
+
+    // Listen for published diagnostics
+    this.connection.onNotification(
+      "textDocument/publishDiagnostics",
+      (params: PublishDiagnosticsParams) => {
+        this._diagnostics.set(params.uri, params.diagnostics);
+      }
+    );
+
+    // Handle workspace/configuration requests from the server.
+    // Servers like Intelephense request their settings via this method.
+    // Return settings from options if configured, otherwise empty defaults.
+    this.connection.onRequest(
+      "workspace/configuration",
+      (params: { items: { section?: string }[] }) => {
+        const settings = this.options.settings;
+        return params.items.map((item) => {
+          if (item.section && settings && item.section in settings) {
+            return settings[item.section];
+          }
+          return {};
+        });
+      }
+    );
+
+    // Handle connection-level errors to prevent unhandled exceptions
+    this.connection.onError(([err]) => {
+      console.error(`[LSP ${this.languageId}] Connection error: ${err.message}`);
+    });
+
+    this.connection.onClose(() => {
+      if (!this._disposed) {
+        this._initialized = false;
+      }
+    });
+  }
+
   /** Connect to an existing LSP daemon via Unix socket (no init handshake needed) */
   private async connectToSocket(socketPath: string): Promise<void> {
     this._isDaemonClient = true;
@@ -120,24 +162,7 @@ export class LspClient {
         const writer = new SocketMessageWriter(socket);
         this.connection = createMessageConnection(reader, writer);
 
-        // Listen for diagnostics
-        this.connection.onNotification(
-          "textDocument/publishDiagnostics",
-          (params: PublishDiagnosticsParams) => {
-            this._diagnostics.set(params.uri, params.diagnostics);
-          }
-        );
-
-        // Handle connection-level errors to prevent unhandled exceptions
-        this.connection.onError(([err]) => {
-          console.error(`[LSP ${this.languageId}] Connection error: ${err.message}`);
-        });
-
-        this.connection.onClose(() => {
-          if (!this._disposed) {
-            this._initialized = false;
-          }
-        });
+        this.registerConnectionHandlers();
 
         this.connection.listen();
         this._initialized = true;
@@ -256,24 +281,7 @@ export class LspClient {
     const writer = new StreamMessageWriter(this.process.stdin);
     this.connection = createMessageConnection(reader, writer);
 
-    // Listen for published diagnostics
-    this.connection.onNotification(
-      "textDocument/publishDiagnostics",
-      (params: PublishDiagnosticsParams) => {
-        this._diagnostics.set(params.uri, params.diagnostics);
-      }
-    );
-
-    // Handle connection-level errors to prevent unhandled exceptions
-    this.connection.onError(([err]) => {
-      console.error(`[LSP ${this.languageId}] Connection error: ${err.message}`);
-    });
-
-    this.connection.onClose(() => {
-      if (!this._disposed) {
-        this._initialized = false;
-      }
-    });
+    this.registerConnectionHandlers();
 
     this.connection.listen();
 
@@ -317,6 +325,7 @@ export class LspClient {
         workspace: {
           workspaceFolders: true,
           symbol: {},
+          configuration: true,
         },
       },
       rootUri,

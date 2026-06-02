@@ -71,7 +71,7 @@ interface ProjectLspConfig {
   /** Path to Lombok jar (absolute or relative to project root). "auto" to auto-detect. */
   lombokJar?: string;
   /** Custom server configs keyed by language ID */
-  servers?: Record<string, { command: string; args?: string[]; env?: Record<string, string> }>;
+  servers?: Record<string, { command: string; args?: string[]; env?: Record<string, string>; initializationOptions?: Record<string, unknown>; settings?: Record<string, unknown> }>;
   /**
    * Auto-inject LSP error diagnostics into write/edit tool results.
    * Set to false to disable, or provide an array of language IDs to enable selectively.
@@ -285,6 +285,8 @@ export default function lspExtension(pi: ExtensionAPI) {
             command: serverConf.command,
             args: serverConf.args ?? [],
             env: serverConf.env,
+            initializationOptions: serverConf.initializationOptions,
+            settings: serverConf.settings,
           });
         }
       }
