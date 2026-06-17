@@ -18,6 +18,7 @@ A [pi](https://github.com/mariozechner/pi-mono) coding agent extension that inte
 | `lsp_rename` | Preview rename refactoring (returns planned edits) |
 | `lsp_completions` | Code completion suggestions at a position |
 | `lsp_code_actions` | Quick fixes, refactorings, and source actions |
+| `lsp_status` | Overview of all LSP servers (running state, diagnostics, shared daemons) |
 | `code_overview` | Project structure, key files, and symbols (tree-sitter) |
 | `code_search` | Find code by AST structure with metavariables |
 | `code_rewrite` | Transform code matching structural patterns |
@@ -78,6 +79,7 @@ Add more at runtime:
 | Command | Description |
 |---------|-------------|
 | `/lsp` | Show status of running LSP servers |
+| `/lsp-status` | Show full structured LSP server overview (rich output) |
 | `/lsp-restart <lang>` | Restart an LSP server (kills daemon, re-initializes) |
 | `/lsp-config <lang> <cmd> [args]` | Configure a language server |
 | `/lsp-lombok [path]` | Set Lombok jar path for Java (or show current) |
