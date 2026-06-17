@@ -487,6 +487,17 @@ export default function lspExtension(pi: ExtensionAPI) {
     },
   });
 
+  // /lsp-status command — invoke the lsp_status tool from the command palette
+  pi.registerCommand("lsp-status", {
+    description: "Run the lsp_status tool — full structured LSP overview",
+    handler: async (_args, ctx) => {
+      const tool = createLspStatusTool(managerProxy as any);
+      const result = await tool.execute("cmd", {});
+      const text = result.content?.[0]?.text ?? "";
+      ctx.ui.notify(text, "info");
+    },
+  });
+
   // /lsp-restart command — restart a specific language server
   pi.registerCommand("lsp-restart", {
     description: "Restart an LSP server: /lsp-restart <language> (e.g. java, typescript)",
