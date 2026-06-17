@@ -15,7 +15,10 @@
   "scripts": {
     "clean": "echo 'nothing to clean'",
     "build": "echo 'nothing to build'",
-    "check": "echo 'nothing to check'"
+    "check": "echo 'nothing to check'",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "prepare": "bun run build"
   },
   "pi": {
     "extensions": [

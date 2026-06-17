@@ -7,12 +7,17 @@ A [pi](https://github.com/mariozechner/pi-mono) coding agent extension that inte
 | Tool | Description |
 |------|-------------|
 | `lsp_diagnostics` | Compilation errors and warnings for a file |
+| `lsp_workspace_diagnostics` | All diagnostics from all running LSP servers (filterable by severity/language) |
 | `lsp_hover` | Type information and documentation at a position |
 | `lsp_definition` | Go to definition of a symbol |
+| `lsp_goto_type_definition` | Go to type/interface definition of a symbol |
 | `lsp_references` | Find all references to a symbol |
+| `lsp_find_implementations` | Find implementations of an interface/abstract class/method |
+| `lsp_find_symbol` | Search for symbols by name across the workspace (no file path needed) |
 | `lsp_symbols` | List file symbols or search workspace symbols |
 | `lsp_rename` | Preview rename refactoring (returns planned edits) |
 | `lsp_completions` | Code completion suggestions at a position |
+| `lsp_code_actions` | Quick fixes, refactorings, and source actions |
 | `code_overview` | Project structure, key files, and symbols (tree-sitter) |
 | `code_search` | Find code by AST structure with metavariables |
 | `code_rewrite` | Transform code matching structural patterns |

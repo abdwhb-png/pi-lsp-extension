@@ -45,6 +45,10 @@ import { createCompletionsTool } from "./tools/completions.js";
 import { createCodeSearchTool } from "./tools/code-search.js";
 import { createCodeRewriteTool } from "./tools/code-rewrite.js";
 import { createCodeActionsTool } from "./tools/code-actions.js";
+import { createTypeDefinitionTool } from "./tools/type-definition.js";
+import { createImplementationTool } from "./tools/implementations.js";
+import { createFindSymbolTool } from "./tools/find-symbol.js";
+import { createWorkspaceDiagnosticsTool } from "./tools/workspace-diagnostics.js";
 import { syntheticDotLocks } from "./tools/completions.js";
 import { relative } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
@@ -351,7 +355,10 @@ export default function lspExtension(pi: ExtensionAPI) {
       getFileSync().handleFileWrite(filePath).catch(() => {});
     },
   }));
-  pi.registerTool(createCodeActionsTool(managerProxy, treeSitterProxy));
+  pi.registerTool(createTypeDefinitionTool(managerProxy, treeSitterProxy));
+  pi.registerTool(createImplementationTool(managerProxy, treeSitterProxy));
+  pi.registerTool(createFindSymbolTool(managerProxy));
+  pi.registerTool(createWorkspaceDiagnosticsTool(managerProxy));
 
   // File sync: track file reads/writes/edits
   // After writes/edits, append file-scoped error diagnostics to the tool result
