@@ -62,9 +62,12 @@ export class MockLspClient {
 export function createMockLspManager(opts: {
   clients?: Map<string, MockLspClient>;
   rootDir?: string;
+  /** Configured language IDs (even if no client is started). If omitted, defaults to clients.keys(). */
+  configuredLanguages?: string[];
 } = {}) {
   const clients = opts.clients ?? new Map();
   const rootDir = opts.rootDir ?? "/mock/project";
+  const configured = opts.configuredLanguages ?? [...clients.keys()];
 
   const manager = {
     getClientForFile: mock(async (filePath: string) => {
@@ -97,15 +100,21 @@ export function createMockLspManager(opts: {
       };
       return map[ext ?? ""];
     }),
-    getConfiguredLanguages: mock(() => [...clients.keys()]),
+    getConfiguredLanguages: mock(() => configured),
     getStatus: mock(() => {
-      return [...clients.entries()].map(([lang, client]) => ({
-        languageId: lang,
-        command: "mock",
-        running: client.initialized && !client.disposed,
-        diagnosticsCount: [...client.getAllDiagnostics().values()].reduce((sum, diags) => sum + diags.length, 0),
-        shared: false,
-      }));
+      return configured.map((lang) => {
+        const client = clients.get(lang);
+        const diagCount = client
+          ? [...client.getAllDiagnostics().values()].reduce((sum, diags) => sum + diags.length, 0)
+          : 0;
+        return {
+          languageId: lang,
+          command: "mock",
+          running: client ? (client.initialized && !client.disposed) : false,
+          diagnosticsCount: diagCount,
+          shared: false,
+        };
+      });
     }),
   };
 

@@ -49,6 +49,7 @@ import { createTypeDefinitionTool } from "./tools/type-definition.js";
 import { createImplementationTool } from "./tools/implementations.js";
 import { createFindSymbolTool } from "./tools/find-symbol.js";
 import { createWorkspaceDiagnosticsTool } from "./tools/workspace-diagnostics.js";
+import { createLspStatusTool } from "./tools/lsp-status.js";
 import { syntheticDotLocks } from "./tools/completions.js";
 import { relative } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
@@ -359,6 +360,7 @@ export default function lspExtension(pi: ExtensionAPI) {
   pi.registerTool(createImplementationTool(managerProxy, treeSitterProxy));
   pi.registerTool(createFindSymbolTool(managerProxy));
   pi.registerTool(createWorkspaceDiagnosticsTool(managerProxy));
+  pi.registerTool(createLspStatusTool(managerProxy));
 
   // File sync: track file reads/writes/edits
   // After writes/edits, append file-scoped error diagnostics to the tool result
@@ -451,9 +453,9 @@ export default function lspExtension(pi: ExtensionAPI) {
     }
   });
 
-  // /lsp command — show server status
+  // /lsp command — show server status overview
   pi.registerCommand("lsp", {
-    description: "Show LSP server status",
+    description: "Show LSP server status overview",
     handler: async (_args, ctx) => {
       if (!manager) {
         ctx.ui.notify("LSP manager not initialized", "warning");
@@ -462,19 +464,26 @@ export default function lspExtension(pi: ExtensionAPI) {
 
       const statuses = manager.getStatus();
       if (statuses.length === 0) {
-        ctx.ui.notify("No LSP servers configured", "info");
+        ctx.ui.notify("No LSP servers configured.\nUse /lsp-config <language> <command> to add one.", "info");
         return;
       }
 
-      const lines = statuses.map((s) => {
-        const icon = s.running ? "🟢" : "⚪";
-        const diags =
-          s.diagnosticsCount > 0 ? ` (${s.diagnosticsCount} diagnostics)` : "";
-        const shared = s.shared ? " [shared]" : "";
-        return `${icon} ${s.languageId}: ${s.command}${diags}${shared}`;
-      });
+      const running = statuses.filter((s) => s.running);
+      const totalDiags = statuses.reduce((sum, s) => sum + s.diagnosticsCount, 0);
+      const hasShared = statuses.some((s) => s.shared);
 
-      ctx.ui.notify(lines.join("\n"), "info");
+      const summaryParts: string[] = [];
+      summaryParts.push(`${running.length}/${statuses.length} server(s) running`);
+      if (totalDiags > 0) summaryParts.push(`${totalDiags} diagnostic(s)`);
+      if (hasShared) summaryParts.push("shared daemons active");
+      ctx.ui.notify(summaryParts.join(", "), "info");
+
+      for (const s of statuses) {
+        const icon = s.running ? "🟢" : "⚪";
+        const diags = s.diagnosticsCount > 0 ? ` (${s.diagnosticsCount} diagnostics)` : "";
+        const shared = s.shared ? " [shared]" : "";
+        ctx.ui.notify(`${icon} ${s.languageId}: ${s.command}${diags}${shared}`, "info");
+      }
     },
   });
 
